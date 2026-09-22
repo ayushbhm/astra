@@ -1,6 +1,13 @@
 import { demoStore } from './demoStore'
+import { api } from './api'
 
 export const adminService = {
+  // User records are intentionally fetched from the API. Do not substitute
+  // local/demo records here: the administrator must only see real accounts.
+  async getUsers() {
+    return api('/admin/users')
+  },
+
   // All cases for admin
   async getAllCases(search = '') {
     const query = search.toLowerCase()

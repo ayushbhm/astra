@@ -17,6 +17,56 @@
       </div>
     </div>
 
+    <section class="users-section" aria-labelledby="users-heading">
+      <div class="section-heading">
+        <div>
+          <span class="eyebrow-label">ACCOUNT DIRECTORY</span>
+          <h2 id="users-heading">All users</h2>
+          <p>Live account information from the server.</p>
+        </div>
+        <button class="btn-secondary" :disabled="usersLoading" @click="loadUsers">
+          {{ usersLoading ? 'Refreshing…' : 'Refresh users' }}
+        </button>
+      </div>
+
+      <div v-if="usersLoading" class="users-state">Loading user accounts…</div>
+      <div v-else-if="usersError" class="users-state users-error" role="alert">
+        {{ usersError }}
+      </div>
+      <div v-else-if="users.length === 0" class="users-state">
+        No user accounts have been returned by the server.
+      </div>
+      <div v-else class="users-table-wrap">
+        <table class="users-table">
+          <thead>
+            <tr>
+              <th scope="col">ID</th>
+              <th scope="col">Name</th>
+              <th scope="col">Email</th>
+              <th scope="col">Phone</th>
+              <th scope="col">Role</th>
+              <th scope="col">Account status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="user in users" :key="user.id">
+              <td>{{ displayValue(user.id) }}</td>
+              <td>{{ displayValue(user.name) }}</td>
+              <td>{{ displayValue(user.email) }}</td>
+              <td>{{ displayValue(user.phone) }}</td>
+              <td><span class="role-badge">{{ displayValue(user.role) }}</span></td>
+              <td>
+                <span v-if="typeof user.is_active === 'boolean'" :class="['status-badge', user.is_active ? 'active' : 'inactive']">
+                  {{ user.is_active ? 'Active' : 'Inactive' }}
+                </span>
+                <span v-else>—</span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
     <!-- Filter Bar (Status & Search) -->
     <div class="admin-filter-bar">
       <div class="status-tabs">
@@ -102,6 +152,9 @@ const loading = ref(false)
 const saving = ref(false)
 const allCases = ref([])
 const filteredCases = ref([])
+const users = ref([])
+const usersLoading = ref(false)
+const usersError = ref('')
 
 const currentStatusFilter = ref('ALL')
 const adminSearch = ref('')
@@ -116,6 +169,22 @@ const statusOptions = [
   { label: 'Approved', value: 'APPROVED' },
   { label: 'Rejected', value: 'REJECTED' }
 ]
+
+const displayValue = (value) => value === null || value === undefined || value === '' ? '—' : value
+
+const loadUsers = async () => {
+  usersLoading.value = true
+  usersError.value = ''
+  try {
+    const result = await adminService.getUsers()
+    users.value = Array.isArray(result) ? result : []
+  } catch (err) {
+    users.value = []
+    usersError.value = err.message || 'Unable to load user accounts.'
+  } finally {
+    usersLoading.value = false
+  }
+}
 
 const loadAdminCases = async () => {
   loading.value = true
@@ -229,6 +298,7 @@ const handleToggleVerified = async (chart) => {
 
 onMounted(() => {
   loadAdminCases()
+  loadUsers()
 })
 </script>
 
@@ -268,6 +338,50 @@ onMounted(() => {
   color: var(--text-muted);
   margin: 0;
 }
+
+.users-section {
+  background: #ffffff;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 20px;
+  margin-bottom: 24px;
+}
+
+.section-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.section-heading .eyebrow-label { margin-bottom: 4px; }
+.section-heading h2 { font-size: 20px; margin: 0 0 4px; }
+.section-heading p { color: var(--text-muted); font-size: 13px; margin: 0; }
+
+.btn-secondary {
+  background: #faf8f5;
+  border: 1px solid #cfc4b3;
+  border-radius: var(--radius-sm);
+  color: #57534e;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 7px 12px;
+  white-space: nowrap;
+}
+
+.btn-secondary:disabled { cursor: wait; opacity: 0.65; }
+.users-state { color: var(--text-muted); padding: 20px 4px; text-align: center; }
+.users-error { color: #9d2020; }
+.users-table-wrap { overflow-x: auto; }
+.users-table { border-collapse: collapse; font-size: 13px; min-width: 720px; width: 100%; }
+.users-table th, .users-table td { border-bottom: 1px solid #eee8df; padding: 12px; text-align: left; }
+.users-table th { color: #6b6257; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; }
+.role-badge, .status-badge { border-radius: 999px; display: inline-block; font-size: 11px; font-weight: 700; padding: 3px 8px; text-transform: capitalize; }
+.role-badge { background: #f1ece4; color: #57534e; }
+.status-badge.active { background: #e4f3e7; color: #276233; }
+.status-badge.inactive { background: #f9e5e5; color: #982b2b; }
 
 /* Filter Bar */
 .admin-filter-bar {
@@ -357,6 +471,7 @@ onMounted(() => {
 
 @media (max-width: 640px) {
   .admin-header { flex-direction: column; align-items: flex-start; gap: 14px; }
+  .section-heading { flex-direction: column; }
   .admin-cases-grid { grid-template-columns: 1fr; }
   .admin-filter-bar { flex-direction: column; align-items: stretch; }
 }

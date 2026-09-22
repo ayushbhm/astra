@@ -1,16 +1,19 @@
 from flask import Flask, render_template
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
-
+from routes.auth_routes import  auth_bp
 from models.model import db
 
-
+from dotenv import load_dotenv
+load_dotenv()
 app = Flask(
     __name__,
     static_folder="static",
     template_folder="templates"
 )
 
+
+app.register_blueprint(auth_bp)
 app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///trek.db"
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config["JWT_SECRET_KEY"] = "secret-key"
