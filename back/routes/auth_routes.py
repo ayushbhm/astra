@@ -4,43 +4,47 @@ from flask_jwt_extended import (
     jwt_required,
     get_jwt_identity
 )
-
+import os
 from models.model import db, User
 
 auth_bp = Blueprint("auth", __name__)
 
+from google.oauth2 import id_token
+from google.auth.transport import requests
 
+@auth_bp.post("/google")
+def google_login():
 
-@auth_bp.route("/register", methods=["POST"])
-def register():
+    credential = request.json["credential"]
+    print("GOOGLE_CLIENT_ID:", os.getenv("GOOGLE_CLIENT_ID"))
 
-    data = request.get_json()
-
-    existing_user = User.query.filter_by(
-        email=data["email"]
-    ).first()
-
-    if existing_user:
-        return jsonify({
-            "message": "Email already exists"
-        }), 400
-
-    user = User(
-        name=data["name"],
-        email=data["email"],
-        password=data["password"],
-        phone=data["phone"],
-        role="user"
+    google_user = id_token.verify_oauth2_token(
+        credential,
+        requests.Request(),
+        os.getenv("GOOGLE_CLIENT_ID")
     )
 
-    db.session.add(user)
-    db.session.commit()
+    user = User.query.filter_by(
+        google_id=google_user["sub"]
+    ).first()
 
-    return jsonify({
-        "message": "Registration successful"
-    }), 201
+    if not user:
+        user = User(
+            google_id=google_user["sub"],
+            email=google_user["email"],
+            name=google_user.get("name", ""),
+            role="user"
+        )
 
+        db.session.add(user)
+        db.session.commit()
 
+    return {
+        "id": user.id,
+        "email": user.email,
+        "name": user.name,
+        "role": user.role
+    }
 
 
 
