@@ -62,6 +62,11 @@ class Case(db.Model):
         primary_key=True
     )
 
+    title = db.Column(
+        db.String(200),
+        nullable=False
+    )
+
     dob = db.Column(
         db.Date,
         nullable=False
@@ -78,6 +83,11 @@ class Case(db.Model):
     )
 
     place = db.Column(
+        db.String(100),
+        nullable=False
+    )
+
+    state = db.Column(
         db.String(100),
         nullable=False
     )

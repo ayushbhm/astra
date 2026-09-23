@@ -2,10 +2,16 @@ from flask import Flask, render_template
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
 from routes.auth_routes import  auth_bp
+from routes.user_routes import user_bp
 from models.model import db
+from sqlalchemy import inspect, text
 
 from dotenv import load_dotenv
-load_dotenv()
+from pathlib import Path
+
+# Always use the backend's Google client ID, even when Flask is started from
+# the repository root or an IDE with an older environment variable set.
+load_dotenv(Path(__file__).with_name('.env'), override=True)
 app = Flask(
     __name__,
     static_folder="static",
@@ -14,6 +20,7 @@ app = Flask(
 
 
 app.register_blueprint(auth_bp)
+app.register_blueprint(user_bp)
 app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///trek.db"
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config["JWT_SECRET_KEY"] = "secret-key"
@@ -34,6 +41,13 @@ def serve_vue(path):
 with app.app_context():
 
     db.create_all()
+    # Existing local SQLite databases predate the title/state fields.
+    case_columns = {column["name"] for column in inspect(db.engine).get_columns("cases")}
+    if "title" not in case_columns:
+        db.session.execute(text("ALTER TABLE cases ADD COLUMN title VARCHAR(200) NOT NULL DEFAULT ''"))
+    if "state" not in case_columns:
+        db.session.execute(text("ALTER TABLE cases ADD COLUMN state VARCHAR(100) NOT NULL DEFAULT ''"))
+    db.session.commit()
 
    
 

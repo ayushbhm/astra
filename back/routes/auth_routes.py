@@ -14,15 +14,23 @@ from google.auth.transport import requests
 
 @auth_bp.post("/google")
 def google_login():
+    payload = request.get_json(silent=True) or {}
+    credential = payload.get("credential")
 
-    credential = request.json["credential"]
-    print("GOOGLE_CLIENT_ID:", os.getenv("GOOGLE_CLIENT_ID"))
+    if not credential:
+        return jsonify({"message": "Google credential is required"}), 400
 
-    google_user = id_token.verify_oauth2_token(
-        credential,
-        requests.Request(),
-        os.getenv("GOOGLE_CLIENT_ID")
-    )
+    try:
+        google_user = id_token.verify_oauth2_token(
+            credential,
+            requests.Request(),
+            os.getenv("GOOGLE_CLIENT_ID")
+        )
+    except Exception as error:
+        # Keep the browser response safe, but retain the real reason in the
+        # Flask terminal (expired token, audience mismatch, etc.).
+        print(f"Google credential verification failed: {error}")
+        return jsonify({"message": "Google credential verification failed"}), 401
 
     user = User.query.filter_by(
         google_id=google_user["sub"]
@@ -39,11 +47,17 @@ def google_login():
         db.session.add(user)
         db.session.commit()
 
+    token = create_access_token(
+        identity=str(user.id),
+        additional_claims={"role": user.role}
+    )
+
     return {
         "id": user.id,
         "email": user.email,
         "name": user.name,
-        "role": user.role
+        "role": user.role,
+        "token": token
     }
 
 
