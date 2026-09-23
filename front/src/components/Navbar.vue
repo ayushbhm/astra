@@ -35,6 +35,7 @@
           ref="googleButton"
           class="google-button-container"
         ></div>
+        <span v-if="loginError" class="login-error">{{ loginError }}</span>
       </div>
 
       <!-- LOGGED IN -->
@@ -60,20 +61,17 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { ref, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuth } from '../composables/useAuth'
-import BASE_URL from '../services/api'
+
 const router = useRouter()
 
-const {
-  user,
-  isAuthenticated,
-  isAdmin,
-  logout
-} = useAuth()
+const { user, isAuthenticated, isAdmin, login, logout } = useAuth()
+
 
 const googleButton = ref(null)
+const loginError = ref('')
 
 let googleCheckInterval = null
 
@@ -83,33 +81,12 @@ let googleCheckInterval = null
  * authenticates the user.
  */
 const handleGoogleCredential = async (response) => {
+  loginError.value = ''
+
   try {
-    const res = await fetch(
-      `${BASE_URL}/google`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          credential: response.credential
-        })
-      }
-    )
+    await login(response.credential)
 
-    const data = await res.json()
-
-    if (!res.ok) {
-      console.error(data.message)
-      return
-    }
-
-    localStorage.setItem(
-      'user',
-      JSON.stringify(data.user)
-    )
-
-    if (data.user.role === 'admin') {
+    if (isAdmin.value) {
       router.push('/adminhome')
     } else {
       router.push('/userhome')
@@ -117,12 +94,14 @@ const handleGoogleCredential = async (response) => {
 
   } catch (error) {
     console.error('Google login failed:', error)
+    loginError.value = error.message || 'Google login failed'
   }
 }
 
 /*
  * Render Google's official login button.
  */
+
 const renderGoogleButton = async () => {
   await nextTick()
 
@@ -161,7 +140,12 @@ const renderGoogleButton = async () => {
   )
 }
 
-
+watch(isAuthenticated, async (loggedIn) => {
+  if (!loggedIn) {
+    await nextTick()
+    renderGoogleButton()
+  }
+})
 /*
  * Wait for Google's script to load.
  */
@@ -261,6 +245,11 @@ const handleLogout = () => {
 .google-button-container {
   display: flex;
   align-items: center;
+}
+
+.login-error {
+  color: #b91c1c;
+  font-size: 12px;
 }
 
 .user-pill {

@@ -1,38 +1,37 @@
-import { demoStore } from './demoStore'
+import { api } from './api'
 
 export const userService = {
-  // Public cases list with optional search query
   async getCases(search = '') {
-    const query = search.toLowerCase()
-    return demoStore.all().filter(chart => chart.status === 'APPROVED').filter(chart =>
-      !query || [chart.title, chart.place, chart.state, chart.story, ...chart.tags].join(' ').toLowerCase().includes(query)
-    )
+    const cases = await api('/cases')
+    const query = search.trim().toLowerCase()
+    return query
+      ? cases.filter(chart => [chart.title, chart.place, chart.state, chart.story, ...chart.tags]
+        .join(' ').toLowerCase().includes(query))
+      : cases
   },
 
   // Cases submitted by the logged-in user
   async getMyCases() {
-    return demoStore.mine()
+    return api('/user/cases')
   },
 
   // Submit a new chart (max 5 enforced)
   async addCase(data) {
-    if (demoStore.mine().length >= 5) throw new Error('Maximum of 5 charts reached')
-    return demoStore.create(data)
+    return api('/user/cases', { method: 'POST', body: JSON.stringify(data) })
   },
 
   // Update own chart
   async updateCase(id, data) {
-    return demoStore.update(id, data)
+    return api(`/user/cases/${id}`, { method: 'PUT', body: JSON.stringify(data) })
   },
 
   // Delete own chart
   async deleteCase(id) {
-    return demoStore.remove(id)
+    await api(`/user/cases/${id}`, { method: 'DELETE' })
   },
 
   getMyQuota() {
-    const count = demoStore.mine().length
-    return { count, max: 5, canAdd: count < 5, remaining: Math.max(0, 5 - count) }
+    return api('/user/quota')
   },
 
   updateMyCase(id, data) { return this.updateCase(id, data) },
