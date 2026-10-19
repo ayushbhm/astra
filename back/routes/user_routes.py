@@ -68,9 +68,34 @@ def assign_tags(case, names):
     case.tags = tags
 
 
+@user_bp.get("/cases/search")
+def search_cases():
+    q = request.args.get("q", "").strip().lower()
+    cases = Case.query.filter_by(status="APPROVED").all()
+    if not q:
+        return jsonify([serialize_case(c) for c in cases])
+
+    tokens = q.split()
+
+    def score(case):
+        text = " ".join([
+            case.title or "",
+            case.place or "",
+            case.state or "",
+            case.story or "",
+            " ".join(tag.name for tag in case.tags)
+        ]).lower()
+        return sum(text.count(t) for t in tokens)
+
+    ranked = sorted([(score(c), c) for c in cases], key=lambda x: -x[0])
+    return jsonify([serialize_case(c) for s, c in ranked if s > 0])
+
+
 @user_bp.get("/cases")
 def public_cases():
     return jsonify([serialize_case(case) for case in Case.query.filter_by(status="APPROVED").all()])
+
+
 
 
 @user_bp.get("/user/cases")

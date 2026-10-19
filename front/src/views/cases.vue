@@ -10,9 +10,12 @@
         </p>
       </div>
 
-      <div class="stats-counter">
-        <span class="counter-num">{{ filteredCases.length }}</span>
-        <span class="counter-label">Charts Displayed</span>
+      <div class="header-right">
+        <CaseSearch @select="openCaseModal" />
+        <div class="stats-counter">
+          <span class="counter-num">{{ filteredCases.length }}</span>
+          <span class="counter-label">Charts Displayed</span>
+        </div>
       </div>
     </div>
 
@@ -96,6 +99,7 @@
 import { ref, onMounted } from 'vue'
 import CaseCard from '../components/CaseCard.vue'
 import CaseModal from '../components/CaseModal.vue'
+import CaseSearch from '../components/CaseSearch.vue'
 import { userService } from '../services/userService'
 
 const loading = ref(false)
@@ -198,6 +202,13 @@ onMounted(() => {
   border-bottom: 1px solid #e7e0d5;
   padding-bottom: 20px;
   margin-bottom: 28px;
+}
+
+.header-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
 }
 
 .eyebrow-label {

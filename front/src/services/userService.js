@@ -1,14 +1,15 @@
 import { api } from './api'
 
 export const userService = {
-  async getCases(search = '') {
-    const cases = await api('/cases')
-    const query = search.trim().toLowerCase()
-    return query
-      ? cases.filter(chart => [chart.title, chart.place, chart.state, chart.story, ...chart.tags]
-        .join(' ').toLowerCase().includes(query))
-      : cases
+  async getCases() {
+    return api('/cases')
   },
+
+  async searchCases(q) {
+    if (!q.trim()) return api('/cases')
+    return api(`/cases/search?q=${encodeURIComponent(q.trim())}`)
+  },
+
 
   // Cases submitted by the logged-in user
   async getMyCases() {

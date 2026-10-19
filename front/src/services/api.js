@@ -16,8 +16,18 @@ export async function api(endpoint, options = {}) {
   })
 
   if (!res.ok) {
-    const error = await res.json().catch(() => ({ message: res.statusText }))
-    throw new Error(error.message || 'API request failed')
+    const contentType = res.headers.get('content-type') || ''
+    let detail = ''
+
+    if (contentType.includes('application/json')) {
+      const error = await res.json().catch(() => ({}))
+      // Flask-JWT-Extended returns `msg`; application routes usually return `message`.
+      detail = error.message || error.msg || ''
+    } else {
+      detail = (await res.text().catch(() => '')).trim().slice(0, 200)
+    }
+
+    throw new Error(detail || `API request failed (${res.status})`)
   }
 
   return res.status === 204 ? null : res.json()

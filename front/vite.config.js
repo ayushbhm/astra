@@ -19,4 +19,15 @@ export default defineConfig({
       '@': fileURLToPath(new URL('./src', import.meta.url)),
     },
   },
+  server: {
+    headers: {
+      // Google Identity Services needs to postMessage from a popup window.
+      // COOP: same-origin (injected by @nuxt/ui) blocks cross-origin popups.
+      'Cross-Origin-Opener-Policy': 'same-origin-allow-popups',
+      'Cross-Origin-Embedder-Policy': 'unsafe-none',
+      // Google recommends this policy when testing GIS over HTTP on localhost.
+      'Referrer-Policy': 'no-referrer-when-downgrade',
+    }
+  }
 })
+

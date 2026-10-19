@@ -1,24 +1,16 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import (
     jwt_required,
-    get_jwt_identity
+    get_jwt_identity,
+    get_jwt
 )
-from datetime import datetime
-from models.model import (
-    db,
-    User,
-    Trek,
-    Booking
-)
+from models.model import db, User
 
 admin_bp = Blueprint("admin", __name__)
 
 
 def is_admin():
-
-    current_user = get_jwt_identity()
-
-    return current_user["role"] == "admin"
+    return get_jwt().get("role") == "admin"
 
 
 # Statistics
@@ -86,7 +78,9 @@ def change_status(id):
             "message": "User not found"
         }), 404
 
-    if user.id == current_user["id"]:
+    if str(user.id) == str(current_user) or (
+        isinstance(current_user, dict) and user.id == current_user.get("id")
+    ):
         return jsonify({
             "message": "Cannot modify yourself"
         }), 400

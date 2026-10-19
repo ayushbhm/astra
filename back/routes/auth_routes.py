@@ -1,16 +1,22 @@
 from flask import Blueprint, request, jsonify
+from functools import partial
 from flask_jwt_extended import (
     create_access_token,
     jwt_required,
     get_jwt_identity
 )
 import os
+from google.auth import exceptions as google_auth_exceptions
 from models.model import db, User
 
 auth_bp = Blueprint("auth", __name__)
 
 from google.oauth2 import id_token
 from google.auth.transport import requests
+
+# google-auth defaults certificate fetches to a 120 second timeout. Keep a
+# local sign-in attempt responsive when Google cannot be reached.
+google_request = partial(requests.Request(), timeout=10)
 
 @auth_bp.post("/google")
 def google_login():
@@ -20,12 +26,20 @@ def google_login():
     if not credential:
         return jsonify({"message": "Google credential is required"}), 400
 
+    print("Google login POST received; verifying credential", flush=True)
     try:
         google_user = id_token.verify_oauth2_token(
             credential,
-            requests.Request(),
-            os.getenv("GOOGLE_CLIENT_ID")
+            google_request,
+            os.getenv("GOOGLE_CLIENT_ID"),
+            clock_skew_in_seconds=60
         )
+        print("Google credential verified", flush=True)
+    except google_auth_exceptions.TransportError as error:
+        print(f"Google certificate request failed: {error}")
+        return jsonify({
+            "message": "Could not reach Google to verify sign-in. Check your internet connection and try again."
+        }), 503
     except Exception as error:
         # Keep the browser response safe, but retain the real reason in the
         # Flask terminal (expired token, audience mismatch, etc.).
@@ -35,6 +49,7 @@ def google_login():
     user = User.query.filter_by(
         google_id=google_user["sub"]
     ).first()
+    print("Google user lookup complete", flush=True)
 
     if not user:
         user = User(
@@ -46,11 +61,13 @@ def google_login():
 
         db.session.add(user)
         db.session.commit()
+        print("Google user created", flush=True)
 
     token = create_access_token(
         identity=str(user.id),
         additional_claims={"role": user.role}
     )
+    print("Google login response ready", flush=True)
 
     return {
         "id": user.id,

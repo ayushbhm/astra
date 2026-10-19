@@ -6,56 +6,23 @@
 
     <nav class="nav-links">
       <router-link to="/">Home</router-link>
-
       <router-link to="/cases">Charts</router-link>
-
-      <router-link
-        v-if="isAuthenticated && !isAdmin"
-        to="/userhome"
-      >
-        My Charts
-      </router-link>
-
-      <router-link
-        v-if="isAdmin"
-        to="/adminhome"
-      >
-        Admin
-      </router-link>
+      <router-link v-if="isAuthenticated && !isAdmin" to="/userhome">My Charts</router-link>
+      <router-link v-if="isAdmin" to="/adminhome">Admin</router-link>
     </nav>
 
     <div class="nav-auth">
-
-      <!-- NOT LOGGED IN -->
-      <div
-        v-if="!isAuthenticated"
-        class="login-group"
-      >
-        <div
-          ref="googleButton"
-          class="google-button-container"
-        ></div>
+      <!-- v-show keeps element in DOM always — Google SDK needs a stable element to render into -->
+      <div v-show="!isAuthenticated" class="login-group" :class="{ 'pulse-attention': pulsing }">
+        <div ref="googleButton" class="google-button-container"></div>
+        <span v-if="loginStatus" class="login-status" role="status">{{ loginStatus }}</span>
         <span v-if="loginError" class="login-error">{{ loginError }}</span>
       </div>
 
-      <!-- LOGGED IN -->
-      <div
-        v-else
-        class="user-pill"
-      >
-        <span>
-          {{ user.name }} ({{ user.role }})
-        </span>
-
-        <button
-          class="btn-logout"
-          type="button"
-          @click="handleLogout"
-        >
-          Logout
-        </button>
+      <div v-show="isAuthenticated" class="user-pill">
+        <span>{{ user?.name }} ({{ user?.role }})</span>
+        <button class="btn-logout" type="button" @click="handleLogout">Logout</button>
       </div>
-
     </div>
   </header>
 </template>
@@ -66,136 +33,95 @@ import { useRouter } from 'vue-router'
 import { useAuth } from '../composables/useAuth'
 
 const router = useRouter()
-
-const { user, isAuthenticated, isAdmin, login, logout } = useAuth()
-
+const { user, isAuthenticated, isAdmin, login, logout, showSignInTrigger } = useAuth()
 
 const googleButton = ref(null)
 const loginError = ref('')
+const loginStatus = ref('')
+const pulsing = ref(false)
 
-let googleCheckInterval = null
+// Google initializes once per page. Re-rendering the button is safe and lets
+// us recover its iframe after Google's popup flow has been cancelled.
+let googleReady = false
 
-
-/*
- * This function runs after Google successfully
- * authenticates the user.
- */
 const handleGoogleCredential = async (response) => {
   loginError.value = ''
-
+  loginStatus.value = 'Google account selected; completing sign-in…'
   try {
-    await login(response.credential)
-
-    if (isAdmin.value) {
-      router.push('/adminhome')
-    } else {
-      router.push('/userhome')
+    if (!response?.credential) {
+      throw new Error('Google returned no credential. Check the browser console for the Google Identity Services error.')
     }
-
-  } catch (error) {
-    console.error('Google login failed:', error)
-    loginError.value = error.message || 'Google login failed'
+    await login(response.credential)
+    router.push(isAdmin.value ? '/adminhome' : '/userhome')
+  } catch (err) {
+    console.error('Google login failed:', err)
+    loginStatus.value = ''
+    loginError.value = err.message || 'Google login failed'
   }
 }
 
-/*
- * Render Google's official login button.
- */
-
-const renderGoogleButton = async () => {
-  await nextTick()
-
-  if (!googleButton.value) {
-    console.error('Google button container not found.')
-    return
-  }
-
-  if (!window.google) {
-    console.error(
-      'Google Identity Services has not loaded.'
-    )
-    return
-  }
-
-  /*
-   * Initialize Google Identity Services.
-   */
-  window.google.accounts.id.initialize({
-    client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID,
-    callback: handleGoogleCredential
+const renderGoogleButton = () => {
+  if (!window.google || !googleButton.value || !googleReady) return
+  // GIS creates an iframe inside this node. Clear any stale instance first.
+  googleButton.value.replaceChildren()
+  window.google.accounts.id.renderButton(googleButton.value, {
+    theme: 'outline',
+    size: 'medium',
+    text: 'signin_with',
+    shape: 'rectangular',
+    logo_alignment: 'left'
   })
 
-  /*
-   * Render Google's actual button.
-   */
-  window.google.accounts.id.renderButton(
-    googleButton.value,
-    {
-      theme: 'outline',
-      size: 'medium',
-      text: 'signin_with',
-      shape: 'rectangular',
-      logo_alignment: 'left'
-    }
-  )
 }
 
-watch(isAuthenticated, async (loggedIn) => {
-  if (!loggedIn) {
-    await nextTick()
-    renderGoogleButton()
+const initGoogle = () => {
+  if (!window.google || !googleButton.value || googleReady) return
+
+  window.google.accounts.id.initialize({
+    client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID,
+    callback: handleGoogleCredential,
+    auto_select: false
+  })
+
+  googleReady = true
+  renderGoogleButton()
+}
+
+// Pulse navbar sign-in area when Home "Sign in" button is clicked
+watch(showSignInTrigger, () => {
+  if (!isAuthenticated.value) {
+    pulsing.value = true
+    setTimeout(() => { pulsing.value = false }, 1200)
   }
 })
-/*
- * Wait for Google's script to load.
- */
-const waitForGoogle = () => {
 
+let checkInterval = null
+
+onMounted(async () => {
+  await nextTick()
   if (window.google) {
-    renderGoogleButton()
-    return
+    initGoogle()
+  } else {
+    checkInterval = setInterval(() => {
+      if (window.google) {
+        clearInterval(checkInterval)
+        checkInterval = null
+        initGoogle()
+      }
+    }, 100)
   }
-
-  googleCheckInterval = setInterval(() => {
-
-    if (window.google) {
-      clearInterval(googleCheckInterval)
-      googleCheckInterval = null
-
-      renderGoogleButton()
-    }
-
-  }, 100)
-}
-
-
-/*
- * Component mounted.
- */
-onMounted(() => {
-  waitForGoogle()
 })
 
-
-/*
- * Component destroyed.
- */
 onBeforeUnmount(() => {
-
-  if (googleCheckInterval) {
-    clearInterval(googleCheckInterval)
-    googleCheckInterval = null
-  }
-
+  if (checkInterval) clearInterval(checkInterval)
 })
 
-
-/*
- * Logout.
- */
 const handleLogout = () => {
+  // Clear Google's remembered account. A full page reload recreates the GIS
+  // client and button iframe for the next sign-in attempt.
+  window.google?.accounts.id.disableAutoSelect()
   logout()
-  router.push('/')
+  window.location.assign('/')
 }
 </script>
 
@@ -240,15 +166,34 @@ const handleLogout = () => {
   display: flex;
   align-items: center;
   gap: 6px;
+  border-radius: 6px;
+  padding: 2px;
+}
+
+.login-group.pulse-attention {
+  animation: pulse-once 0.8s ease forwards;
+}
+
+@keyframes pulse-once {
+  0%   { box-shadow: 0 0 0 0 rgba(200,155,60,0.7); }
+  50%  { box-shadow: 0 0 0 8px rgba(200,155,60,0.1); }
+  100% { box-shadow: 0 0 0 0 rgba(200,155,60,0); }
 }
 
 .google-button-container {
   display: flex;
   align-items: center;
+  min-width: 120px;
+  min-height: 40px;
 }
 
 .login-error {
   color: #b91c1c;
+  font-size: 12px;
+}
+
+.login-status {
+  color: #57534e;
   font-size: 12px;
 }
 

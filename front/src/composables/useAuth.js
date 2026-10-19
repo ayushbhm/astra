@@ -1,7 +1,9 @@
 import { ref, computed } from 'vue'
 import { authService } from '../services/authService'
 
+// Singleton reactive state
 const user = ref(authService.getUser())
+const showSignInTrigger = ref(0) // bump to tell Navbar to focus/highlight sign-in
 
 export function useAuth() {
   const isAuthenticated = computed(() => !!user.value)
@@ -16,11 +18,18 @@ export function useAuth() {
     user.value = null
   }
 
+  // Any component can call this to signal the navbar sign-in button
+  const promptSignIn = () => {
+    showSignInTrigger.value++
+  }
+
   return {
     user,
     isAuthenticated,
     isAdmin,
     login,
-    logout
+    logout,
+    promptSignIn,
+    showSignInTrigger
   }
 }

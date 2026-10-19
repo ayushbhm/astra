@@ -3,6 +3,7 @@ from flask_cors import CORS
 from flask_jwt_extended import JWTManager
 from routes.auth_routes import  auth_bp
 from routes.user_routes import user_bp
+from routes.admin_routes import admin_bp
 from models.model import db
 from sqlalchemy import inspect, text
 
@@ -21,9 +22,19 @@ app = Flask(
 
 app.register_blueprint(auth_bp)
 app.register_blueprint(user_bp)
+app.register_blueprint(admin_bp, url_prefix="/admin")
 app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///trek.db"
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config["JWT_SECRET_KEY"] = "secret-key"
+
+
+@app.after_request
+def allow_google_identity_popup(response):
+    # The Google Identity Services popup must be able to message its opener.
+    # Vite sets this for development, but Flask serves the built app directly
+    # in production and needs to send the same policy itself.
+    response.headers["Cross-Origin-Opener-Policy"] = "same-origin-allow-popups"
+    return response
 
 db.init_app(app)
 

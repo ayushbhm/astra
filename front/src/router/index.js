@@ -43,18 +43,16 @@ const router = createRouter({
 })
 
 // Navigation Guard
-router.beforeEach((to, from, next) => {
+router.beforeEach((to, from) => {
   const user = authService.getUser()
 
   if (to.meta.requiresAdmin && (!user || user.role !== 'admin')) {
-    return next({ path: '/' })
+    return '/'
   }
 
   if (to.meta.requiresAuth && !user) {
-    return next({ path: '/' })
+    return '/'
   }
-
-  next()
 })
 
 export default router

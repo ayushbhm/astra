@@ -26,11 +26,27 @@
         <div class="row">
           <div class="field">
             <label>Place / City *</label>
-            <input type="text" v-model="form.place" required placeholder="e.g. Pune" />
+            <div class="picker">
+              <input type="text" v-model="form.place" required placeholder="Type or choose a city" autocomplete="off"
+                @focus="cityPickerOpen = true" @input="cityPickerOpen = true" @blur="closePickers" />
+              <div v-if="cityPickerOpen && filteredCities.length" class="suggestions">
+                <button v-for="(entry, index) in filteredCities" :key="`${entry.city}-${entry.state}-${index}`"
+                  type="button" class="suggestion" @mousedown.prevent="chooseCity(entry)">
+                  <span>{{ entry.city }}</span><small>{{ entry.state }}</small>
+                </button>
+              </div>
+            </div>
           </div>
           <div class="field">
             <label>State *</label>
-            <input type="text" v-model="form.state" required placeholder="e.g. Maharashtra" />
+            <div class="picker">
+              <input type="text" v-model="form.state" required placeholder="Type or choose a state" autocomplete="off"
+                @focus="statePickerOpen = true" @input="statePickerOpen = true" @blur="closePickers" />
+              <div v-if="statePickerOpen && filteredStates.length" class="suggestions">
+                <button v-for="state in filteredStates" :key="state" type="button" class="suggestion"
+                  @mousedown.prevent="chooseState(state)">{{ state }}</button>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -63,7 +79,8 @@
 </template>
 
 <script setup>
-import { ref, reactive, watch } from 'vue'
+import { ref, reactive, watch, computed } from 'vue'
+import cities from '../data/cities.json'
 
 const props = defineProps({
   isOpen: Boolean,
@@ -74,6 +91,17 @@ const props = defineProps({
 const emit = defineEmits(['close', 'save'])
 
 const tagsInput = ref('')
+const cityPickerOpen = ref(false)
+const statePickerOpen = ref(false)
+const states = [...new Set(cities.map(entry => entry.state))].sort()
+const filteredCities = computed(() => {
+  const query = form.place.trim().toLowerCase()
+  return cities.filter(entry => !query || entry.city.toLowerCase().includes(query) || entry.state.toLowerCase().includes(query)).slice(0, 8)
+})
+const filteredStates = computed(() => {
+  const query = form.state.trim().toLowerCase()
+  return states.filter(state => !query || state.toLowerCase().includes(query)).slice(0, 8)
+})
 const form = reactive({
   title: '',
   dob: '',
@@ -83,6 +111,29 @@ const form = reactive({
   state: '',
   story: ''
 })
+
+watch(() => form.place, (place) => {
+  const match = cities.find(entry => entry.city.toLowerCase() === place.trim().toLowerCase())
+  if (match) form.state = match.state
+})
+
+const chooseCity = (entry) => {
+  form.place = entry.city
+  form.state = entry.state
+  cityPickerOpen.value = false
+}
+
+const chooseState = (state) => {
+  form.state = state
+  statePickerOpen.value = false
+}
+
+const closePickers = () => {
+  setTimeout(() => {
+    cityPickerOpen.value = false
+    statePickerOpen.value = false
+  }, 150)
+}
 
 watch(() => props.initialData, (val) => {
   if (val) {
@@ -153,6 +204,36 @@ const submit = () => {
   font-size: 13px;
   box-sizing: border-box;
 }
+
+.picker { position: relative; }
+.suggestions {
+  position: absolute;
+  z-index: 5;
+  top: calc(100% + 2px);
+  left: 0;
+  right: 0;
+  max-height: 180px;
+  overflow-y: auto;
+  background: #fff;
+  border: 1px solid #d6d3d1;
+  border-radius: 4px;
+  box-shadow: 0 4px 12px rgb(0 0 0 / 12%);
+}
+.suggestion {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 8px;
+  border: 0;
+  background: #fff;
+  color: #292524;
+  text-align: left;
+  font-size: 13px;
+  cursor: pointer;
+}
+.suggestion:hover { background: #f5f1eb; }
+.suggestion small { color: #78716c; }
 
 .row {
   display: grid;

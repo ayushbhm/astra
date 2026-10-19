@@ -24,7 +24,7 @@
           Browse Charts Library →
         </router-link>
 
-        <button v-if="!isAuthenticated" class="btn-outline btn-large" @click="openLoginModal">
+        <button v-if="!isAuthenticated" class="btn-outline btn-large" @click="promptSignIn">
           Sign in with Google
         </button>
 
@@ -73,7 +73,7 @@
 <script setup>
 import { useAuth } from '../composables/useAuth'
 
-const { isAuthenticated, isAdmin, openLoginModal } = useAuth()
+const { isAuthenticated, isAdmin, promptSignIn } = useAuth()
 </script>
 
 <style scoped>
