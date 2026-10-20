@@ -1,18 +1,20 @@
-from flask import Flask, render_template
+from dotenv import load_dotenv
+from pathlib import Path
+
+# Load provider keys before importing route and search modules that read them.
+load_dotenv(Path(__file__).with_name('.env'), override=True)
+
+from flask import Flask, jsonify, render_template
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
 from routes.auth_routes import  auth_bp
 from routes.user_routes import user_bp
 from routes.admin_routes import admin_bp
+from routes.search_routes import search_bp
 from models.model import db
 from sqlalchemy import inspect, text
+from sqlalchemy.exc import SQLAlchemyError
 
-from dotenv import load_dotenv
-from pathlib import Path
-
-# Always use the backend's Google client ID, even when Flask is started from
-# the repository root or an IDE with an older environment variable set.
-load_dotenv(Path(__file__).with_name('.env'), override=True)
 app = Flask(
     __name__,
     static_folder="static",
@@ -23,6 +25,7 @@ app = Flask(
 app.register_blueprint(auth_bp)
 app.register_blueprint(user_bp)
 app.register_blueprint(admin_bp, url_prefix="/admin")
+app.register_blueprint(search_bp, url_prefix="/admin/search")
 app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///trek.db"
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config["JWT_SECRET_KEY"] = "secret-key"
@@ -41,6 +44,17 @@ db.init_app(app)
 JWTManager(app)
 
 CORS(app)
+
+
+@app.get("/health")
+def health():
+    """Fast readiness endpoint used by the sign-in UI."""
+    try:
+        with db.engine.connect() as connection:
+            connection.execute(text("SELECT 1"))
+        return jsonify({"status": "ok"})
+    except SQLAlchemyError:
+        return jsonify({"status": "not_ready"}), 503
 
 
 @app.route("/", defaults={"path": ""})

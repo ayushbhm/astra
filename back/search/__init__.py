@@ -1,0 +1,1 @@
+"""Pluggable admin search pipeline."""

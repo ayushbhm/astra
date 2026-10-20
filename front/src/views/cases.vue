@@ -22,7 +22,7 @@
     <!-- Search & Filter Controls -->
     <div class="filter-controls-bar">
       <div class="search-input-wrap">
-        <span class="search-icon">🔍</span>
+        
         <input 
           type="text" 
           placeholder="Search by topic, city, keyword, or planetary position (e.g. Pune, Rahu, Marriage)..." 

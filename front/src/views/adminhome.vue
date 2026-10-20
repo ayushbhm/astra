@@ -85,10 +85,13 @@
       <div class="admin-search-wrap">
         <input 
           type="text" 
-          placeholder="Filter by title, place, state..."
+          placeholder="Ask by meaning: job timing, difficult marriage..."
           v-model="adminSearch"
-          @input="applyFilters"
+          @input="scheduleSearch"
         />
+        <small v-if="searching">Understanding question and ranking charts…</small>
+        <small v-else-if="searchError || indexError" class="search-error" role="status">{{ searchError || indexError }}</small>
+        <small v-else-if="searchIntent">Search intent: {{ searchIntent }}</small>
       </div>
     </div>
 
@@ -107,12 +110,12 @@
     <!-- Admin Cases Grid -->
     <div v-else class="admin-cases-grid">
       <CaseCard 
-        v-for="c in filteredCases" 
+        v-for="c in paginatedCases"
         :key="c.id" 
         :chart="c"
         :can-manage="true"
         :show-status="true"
-        :is-admin-mode="true"
+        :is-admin="true"
         @view="openViewModal"
         @edit="openEditModal"
         @delete="handleDelete"
@@ -120,6 +123,12 @@
         @reject="handleReject"
         @toggle-verified="handleToggleVerified"
       />
+    </div>
+
+    <div v-if="pageCount > 1" class="cases-pagination" aria-label="Chart pages">
+      <button class="btn-secondary" :disabled="currentPage === 1" @click="currentPage--">Previous</button>
+      <span>Page {{ currentPage }} of {{ pageCount }} · {{ filteredCases.length }} charts</span>
+      <button class="btn-secondary" :disabled="currentPage === pageCount" @click="currentPage++">Next</button>
     </div>
 
     <!-- Add / Edit Modal (Admin Mode: No limits, controls status) -->
@@ -142,7 +151,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import CaseCard from '../components/CaseCard.vue'
 import CaseFormModal from '../components/CaseFormModal.vue'
 import CaseModal from '../components/CaseModal.vue'
@@ -152,9 +161,23 @@ const loading = ref(false)
 const saving = ref(false)
 const allCases = ref([])
 const filteredCases = ref([])
+const currentPage = ref(1)
+const pageSize = 20
+const pageCount = computed(() => Math.max(1, Math.ceil(filteredCases.value.length / pageSize)))
+const paginatedCases = computed(() => {
+  const start = (currentPage.value - 1) * pageSize
+  return filteredCases.value.slice(start, start + pageSize)
+})
 const users = ref([])
 const usersLoading = ref(false)
 const usersError = ref('')
+const searching = ref(false)
+const searchError = ref('')
+const indexError = ref('')
+const searchIntent = ref('')
+let searchSequence = 0
+let searchTimer
+let refreshTimer
 
 const currentStatusFilter = ref('ALL')
 const adminSearch = ref('')
@@ -190,7 +213,16 @@ const loadAdminCases = async () => {
   loading.value = true
   try {
     allCases.value = await adminService.getAllCases()
-    applyFilters()
+    try {
+      const indexStatus = await adminService.syncSearchIndex()
+      indexError.value = indexStatus.indexed
+        ? `Added ${indexStatus.indexed} new or changed chart${indexStatus.indexed === 1 ? '' : 's'} to semantic search.`
+        : ''
+    } catch (err) {
+      // Admin can still use the search endpoint's lexical fallback if embedding is unavailable.
+      indexError.value = err.message || 'Semantic index refresh failed.'
+    }
+    await applyFilters()
   } catch (err) {
     console.error('Failed to load admin cases:', err)
   } finally {
@@ -198,25 +230,51 @@ const loadAdminCases = async () => {
   }
 }
 
-const applyFilters = () => {
+const scheduleSearch = () => {
+  clearTimeout(searchTimer)
+  searchTimer = setTimeout(() => applyFilters(), 800)
+}
+
+const applyFilters = async () => {
+  const sequence = ++searchSequence
+  currentPage.value = 1
+  const query = adminSearch.value.trim()
   let result = [...allCases.value]
+
+  searchError.value = ''
+  searchIntent.value = ''
+  if (query) {
+    searching.value = true
+    try {
+      const response = await adminService.searchCases(query)
+      if (sequence !== searchSequence) return
+      result = response.results || []
+      searchIntent.value = response.intent || ''
+    } catch (err) {
+      if (sequence !== searchSequence) return
+      searchError.value = `${err.message || 'AI search unavailable.'} Showing exact text matches.`
+      const normalized = query.toLowerCase()
+      result = allCases.value.filter(chart =>
+        [chart.title, chart.place, chart.state, chart.story, ...(chart.tags || [])]
+          .join(' ').toLowerCase().includes(normalized)
+      )
+    } finally {
+      if (sequence === searchSequence) searching.value = false
+    }
+  } else {
+    searching.value = false
+  }
 
   if (currentStatusFilter.value !== 'ALL') {
     result = result.filter(c => c.status === currentStatusFilter.value)
   }
-
-  if (adminSearch.value.trim()) {
-    const s = adminSearch.value.trim().toLowerCase()
-    result = result.filter(c =>
-      (c.title && c.title.toLowerCase().includes(s)) ||
-      (c.place && c.place.toLowerCase().includes(s)) ||
-      (c.state && c.state.toLowerCase().includes(s)) ||
-      (c.story && c.story.toLowerCase().includes(s))
-    )
-  }
-
+  if (sequence !== searchSequence) return
   filteredCases.value = result
 }
+
+watch(pageCount, (count) => {
+  if (currentPage.value > count) currentPage.value = count
+})
 
 const setStatusFilter = (val) => {
   currentStatusFilter.value = val
@@ -299,6 +357,16 @@ const handleToggleVerified = async (chart) => {
 onMounted(() => {
   loadAdminCases()
   loadUsers()
+  // Pick up charts submitted while this admin page stays open. Unchanged chart
+  // text is fingerprinted by the backend and never embedded a second time.
+  refreshTimer = setInterval(() => {
+    if (document.visibilityState === 'visible') loadAdminCases()
+  }, 5 * 60 * 1000)
+})
+
+onUnmounted(() => {
+  clearInterval(refreshTimer)
+  clearTimeout(searchTimer)
 })
 </script>
 
@@ -448,10 +516,29 @@ onMounted(() => {
   outline: none;
 }
 
+.admin-search-wrap small {
+  display: block;
+  margin-top: 6px;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.admin-search-wrap .search-error { color: #9d2020; }
+
 .admin-cases-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 24px;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+.cases-pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 16px;
+  margin-top: 20px;
+  color: var(--text-muted);
+  font-size: 12px;
 }
 
 .loading-state, .empty-state {
@@ -466,7 +553,7 @@ onMounted(() => {
 }
 
 @media (max-width: 960px) {
-  .admin-cases-grid { grid-template-columns: repeat(2, 1fr); }
+  .admin-cases-grid { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 640px) {

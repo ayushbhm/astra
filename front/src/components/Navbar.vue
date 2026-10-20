@@ -31,6 +31,7 @@
 import { ref, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuth } from '../composables/useAuth'
+import { authService } from '../services/authService'
 
 const router = useRouter()
 const { user, isAuthenticated, isAdmin, login, logout, showSignInTrigger } = useAuth()
@@ -98,6 +99,9 @@ watch(showSignInTrigger, () => {
 let checkInterval = null
 
 onMounted(async () => {
+  authService.checkBackend().catch((error) => {
+    loginError.value = error.message
+  })
   await nextTick()
   if (window.google) {
     initGoogle()

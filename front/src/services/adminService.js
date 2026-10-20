@@ -1,4 +1,3 @@
-import { demoStore } from './demoStore'
 import { api } from './api'
 
 export const adminService = {
@@ -10,37 +9,46 @@ export const adminService = {
 
   // All cases for admin
   async getAllCases(search = '') {
-    const query = search.toLowerCase()
-    return demoStore.all().filter(chart => !query || [chart.title, chart.place, chart.state, chart.story].join(' ').toLowerCase().includes(query))
+    const cases = await api('/admin/cases')
+    const query = search.trim().toLowerCase()
+    return cases.filter(chart => !query || [chart.title, chart.place, chart.state, chart.story].join(' ').toLowerCase().includes(query))
+  },
+
+  async syncSearchIndex() {
+    return api('/admin/search/index', { method: 'POST' })
+  },
+
+  async searchCases(query) {
+    return api('/admin/search', { method: 'POST', body: JSON.stringify({ query }) })
   },
 
   // Add chart (no limit)
   async addCase(data) {
-    return demoStore.create(data, 1, true)
+    return api('/admin/cases', { method: 'POST', body: JSON.stringify(data) })
   },
 
   // Update any chart
   async updateCase(id, data) {
-    return demoStore.update(id, data)
+    return api(`/admin/cases/${id}`, { method: 'PUT', body: JSON.stringify(data) })
   },
 
   // Delete any chart
   async deleteCase(id) {
-    return demoStore.remove(id)
+    return api(`/admin/cases/${id}`, { method: 'DELETE' })
   },
 
   // Approve pending chart
   async approveCase(id) {
-    return demoStore.setStatus(id, 'APPROVED')
+    return api(`/admin/cases/${id}/status`, { method: 'PUT', body: JSON.stringify({ status: 'APPROVED' }) })
   },
 
   // Reject pending chart
   async rejectCase(id) {
-    return demoStore.setStatus(id, 'REJECTED')
+    return api(`/admin/cases/${id}/status`, { method: 'PUT', body: JSON.stringify({ status: 'REJECTED' }) })
   },
 
   // Toggle verified badge
-  async toggleVerified(id) { return demoStore.toggleVerification(id) },
+  async toggleVerified(id) { return api(`/admin/cases/${id}/verification`, { method: 'PUT' }) },
   createCase(data) { return this.addCase(data) },
   toggleVerification(id) { return this.toggleVerified(id) }
 }

@@ -157,3 +157,13 @@ class Tag(db.Model):
         secondary=case_tags,
         back_populates="tags"
     )
+
+
+class CaseSearchEmbedding(db.Model):
+    """Cached vector for a chart; regenerated only when chart text changes."""
+    __tablename__ = "case_search_embeddings"
+
+    case_id = db.Column(db.Integer, db.ForeignKey("cases.id"), primary_key=True)
+    content_hash = db.Column(db.String(64), nullable=False)
+    model = db.Column(db.String(120), nullable=False)
+    vector = db.Column(db.LargeBinary, nullable=False)
