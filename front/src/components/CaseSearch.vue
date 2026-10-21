@@ -26,6 +26,7 @@
 
         <!-- States -->
         <div v-if="loading" class="search-state">Searching...</div>
+        <div v-else-if="searchError" class="search-state search-error" role="alert">{{ searchError }}</div>
         <div v-else-if="query && results.length === 0" class="search-state">No matching charts found.</div>
         <div v-else-if="results.length" class="search-results">
           <div
@@ -57,22 +58,25 @@ const open = ref(false)
 const query = ref('')
 const results = ref([])
 const loading = ref(false)
+const searchError = ref('')
 const inputEl = ref(null)
 
 let timer = null
 
 const debounceSearch = () => {
   clearTimeout(timer)
+  searchError.value = ''
   if (!query.value.trim()) { results.value = []; return }
-  timer = setTimeout(doSearch, 350)
+  timer = setTimeout(doSearch, 600)
 }
 
 const doSearch = async () => {
   loading.value = true
   try {
     results.value = await userService.searchCases(query.value)
-  } catch {
+  } catch (error) {
     results.value = []
+    searchError.value = error.message || 'Smart search is unavailable. Please try again.'
   } finally {
     loading.value = false
   }
@@ -82,6 +86,7 @@ const close = () => {
   open.value = false
   query.value = ''
   results.value = []
+  searchError.value = ''
 }
 
 watch(open, async (v) => {
@@ -161,6 +166,7 @@ watch(open, async (v) => {
   color: #57534e;
 }
 .search-state.muted { color: #c4b9a8; }
+.search-state.search-error { color: #b91c1c; }
 
 .search-results { max-height: 400px; overflow-y: auto; }
 

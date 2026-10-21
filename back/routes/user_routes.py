@@ -6,6 +6,8 @@ from flask_jwt_extended import (
 from datetime import datetime
 import re
 from models.model import db, Case, Tag
+from search.providers import SearchProviderError
+from search.registry import search_cases as run_smart_search
 
 
 user_bp = Blueprint("user", __name__)
@@ -74,21 +76,11 @@ def search_cases():
     cases = Case.query.filter_by(status="APPROVED").all()
     if not q:
         return jsonify([serialize_case(c) for c in cases])
-
-    tokens = q.split()
-
-    def score(case):
-        text = " ".join([
-            case.title or "",
-            case.place or "",
-            case.state or "",
-            case.story or "",
-            " ".join(tag.name for tag in case.tags)
-        ]).lower()
-        return sum(text.count(t) for t in tokens)
-
-    ranked = sorted([(score(c), c) for c in cases], key=lambda x: -x[0])
-    return jsonify([serialize_case(c) for s, c in ranked if s > 0])
+    try:
+        _plan, matches = run_smart_search(q, cases)
+        return jsonify([serialize_case(item["case"]) for item in matches[:200]])
+    except SearchProviderError as error:
+        return jsonify({"message": str(error)}), 503
 
 
 @user_bp.get("/cases")
