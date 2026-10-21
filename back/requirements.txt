@@ -6,3 +6,4 @@ flask_sqlalchemy==3.1.1
 redis==5.0.8
 google-auth
 python-dotenv
+requests
