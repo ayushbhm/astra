@@ -4,7 +4,7 @@ from pathlib import Path
 # Load provider keys before importing route and search modules that read them.
 load_dotenv(Path(__file__).with_name('.env'), override=True)
 
-from flask import Flask, jsonify, render_template
+from flask import Flask, jsonify, send_from_directory
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
 from routes.auth_routes import  auth_bp
@@ -60,7 +60,8 @@ def health():
 @app.route("/", defaults={"path": ""})
 @app.route("/<path:path>")
 def serve_vue(path):
-    return render_template("index.html")
+    # Serve Vite's existing production HTML, which points to /static/assets/.
+    return send_from_directory(app.static_folder, "index.html")
 
 
 with app.app_context():
